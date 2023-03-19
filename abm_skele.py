@@ -1,5 +1,6 @@
 from collections import ChainMap, deque
 import random
+import math
 from bisect import bisect
 
 class Agent():
@@ -79,14 +80,17 @@ class ABM():
         self.mover = AgentMover() # map of how people move around
         self.t = 0
 
-    def move(self, agent):
+    def move(self, agent, location):
         agent_obj = self.agents[agent]
-        new_loc = self.mover.next_location(agent_obj)
-        new_loc_obj = self.locations[new_loc]
+        loc_obj = self.locations[location]
 
         self.locations[agent_obj.location].occupants.remove(agent)
-        agent_obj.move_to(new_loc)
-        new_loc_obj.occupants.add(agent)
+        agent_obj.move_to(location)
+        loc_obj.occupants.add(agent)
+
+    def do_next_move(self, agent):
+        next_loc = self.mover.next_location(agent)
+        self.move(agent, next_loc)
 
     def add_agent(self, agent):
         self.agents[agent.id] = agent
@@ -94,6 +98,15 @@ class ABM():
     def add_location(self, location):
         self.locations[location.id] = location
 
+    def add_generic_agents(self, n):
+        digits = int(math.ceil(math.log10(n)))
+        for i in range(n):
+            agent = Agent(f"agent_{i:{digits}.0}")
+            self.add_agent(agent)
+
+    def move_all_to(self, location):
+        for agent in self.agents:
+            self.move(agent, location)
 
 if __name__ == "__main__":
     """Basic smoke test"""
@@ -144,7 +157,7 @@ if __name__ == "__main__":
     print("took", t1-t0, 's')
 
     # time the speed of getting next location of an object with len(2) hist
-    abm.move('Harold')
+    abm.do_next_move('Harold')
     t0 = perf_counter()
     new_locations = [abm.mover.next_location(agent) for _ in range(100_000)]
     t1 = perf_counter()
@@ -154,6 +167,6 @@ if __name__ == "__main__":
     # time the speed of actually moving the agent around
     t0 = perf_counter()
     for _ in range(100_000):
-        abm.move('Harold')
+        abm.do_next_move('Harold')
     t1 = perf_counter()
     print("took", t1-t0, 's')
