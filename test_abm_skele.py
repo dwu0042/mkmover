@@ -108,3 +108,63 @@ def test_next_move(abm, harold, move_probs):
             abm.do_next_move(harold.id)
         record[harold.location] += 1
     assert [r/N for r in record.values()] == pytest.approx(list(expected.values()), rel=0.02)
+
+@timeit
+def test_add_event(abm, harold):
+    """Test that adding events works correctly"""
+
+    event_one = {'t': 1, 'event_type': ab.EventType.Move, 'agent': harold.id}
+    event_two = {'t': 0.5, 'event_type': ab.EventType.Infect, 'agent': harold.id}
+
+    abm.queue.clear()
+    abm.add_event(**event_one)
+    abm.add_event(**event_two)
+
+    assert len(abm.queue) == 2
+    assert abm.queue[0].event_type is ab.EventType.Infect
+    assert abm.queue[1].t == 1.0
+
+    abm.queue.clear()
+
+@timeit
+def test_handle_move(abm, harold):
+    """Test that the ABM hadles moving correctly"""
+
+    # preset agent to C
+    abm.move(harold.id, 'C')
+
+    abm.queue.clear()
+    abm.add_event(t=0.0, event_type=ab.EventType.Move, agent=harold.id)
+    abm.handle_next_event()
+
+    assert harold.location != 'C'
+    assert len(abm.queue) == 0
+    assert abm.t == 0.5
+
+    abm.t = 0.0
+
+@timeit
+def test_infect_process(abm, harold):
+    """Test that the ABM handles infection correctly"""
+
+    # new agent
+    victim = ab.Agent(name='victim', maxhist=1)
+    victim.infected = 'S'
+    abm.add_agent(victim)
+    abm.move(victim.id, 'C')
+    
+    abm.move(harold.id, 'C')
+    harold.infected = 'I'
+
+    abm.queue.clear()
+    abm.add_event(t=0.7, event_type=ab.EventType.Infect, agent=harold.id)
+    abm.handle_next_event()
+
+    assert harold.location == victim.location == 'C'
+    assert victim.infected == 'I'
+    assert len(abm.queue) == 0
+    assert abm.t == 0.7
+
+    abm.t = 0.0
+    del abm.agents[victim.id]
+    harold.infected = 'S'
