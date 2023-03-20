@@ -84,12 +84,15 @@ class ABM():
         agent_obj = self.agents[agent]
         loc_obj = self.locations[location]
 
-        self.locations[agent_obj.location].occupants.remove(agent)
+        old_loc = self.locations.get(agent_obj.location, None)
+        if old_loc:
+            old_loc.occupants.remove(agent)
         agent_obj.move_to(location)
         loc_obj.occupants.add(agent)
 
     def do_next_move(self, agent):
-        next_loc = self.mover.next_location(agent)
+        agent_obj = self.agents[agent]
+        next_loc = self.mover.next_location(agent_obj)
         self.move(agent, next_loc)
 
     def add_agent(self, agent):
