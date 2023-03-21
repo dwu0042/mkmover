@@ -1,9 +1,10 @@
-from collections import ChainMap, deque
-import random
-import math
-from bisect import bisect
 import dataclasses
 import enum
+import math
+import random
+from bisect import bisect
+from collections import ChainMap, deque
+
 import sortedcontainers
 
 class Agent():

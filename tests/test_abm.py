@@ -1,11 +1,14 @@
-from time import perf_counter
-from collections import Counter
-import pytest
-import abm_skele as ab
-from typing import Sequence, Callable
-from functools import wraps
 import random
+from collections import Counter
+from typing import Sequence, Callable
+
+from time import perf_counter
+from functools import wraps
+
 import flaky
+import pytest
+
+import mkmover.abm as ab
 
 @pytest.fixture
 def move_probs():
