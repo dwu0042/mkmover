@@ -8,10 +8,10 @@ import sortedcontainers
 
 class Agent():
     def __init__(self, name, maxhist=None):
-        """Represents a patient.
+        """Represents a patient or other vector.
 
-        :param name: _description_
-        :param maxhist: _description_, defaults to None
+        :param name: unique identifier
+        :param maxhist: (max) length of recorded location history, defaults to None (no limit)
         """
         self.id = name
         self.infected = False
@@ -160,7 +160,7 @@ class ABM():
         targets = self.locations[loc].occupants
         if len(targets) < 2:
             return
-        cands = random.sample(targets, k=2)
+        cands = random.sample(list(targets), k=2)
         if cands[0] == agent:
             cands.remove(agent)
         cand_obj = self.agents[cands[0]]
