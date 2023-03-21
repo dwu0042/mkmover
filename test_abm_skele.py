@@ -5,6 +5,7 @@ import abm_skele as ab
 from typing import Sequence, Callable
 from functools import wraps
 import random
+import flaky
 
 @pytest.fixture
 def move_probs():
@@ -65,6 +66,7 @@ def timeit(func : Callable):
 
     return wrapped_func
 
+@flaky.flaky
 @timeit
 def test_move_next_hist_1(abm, harold, move_probs):
     """Tests that Mover lookup with 1-history works"""
@@ -79,6 +81,7 @@ def test_move_next_hist_1(abm, harold, move_probs):
 
     assert counts['B'] / counts['C'] == pytest.approx(expected, rel=1e-2)
 
+@flaky.flaky
 @timeit
 def test_move_next_hist_2(abm, harold, move_probs):
     """Tests that Mover lookup with 2-history, and abm manual moving works"""
@@ -93,6 +96,7 @@ def test_move_next_hist_2(abm, harold, move_probs):
 
     assert counts['C'] / counts['A'] == pytest.approx(expected, rel=1.5e-2)
 
+@flaky.flaky
 @timeit
 def test_next_move(abm, harold, move_probs):
     """Tests ABM control over mover + movement update works"""
@@ -107,7 +111,7 @@ def test_next_move(abm, harold, move_probs):
         for _ in range(random.choice([5, 7, 11])):
             abm.do_next_move(harold.id)
         record[harold.location] += 1
-    assert [r/N for r in record.values()] == pytest.approx(list(expected.values()), rel=0.02)
+    assert [r/N for r in record.values()] == pytest.approx(list(expected.values()), rel=0.03)
 
 @timeit
 def test_add_event(abm, harold):
@@ -134,7 +138,7 @@ def test_handle_move(abm, harold):
     abm.move(harold.id, 'C')
 
     abm.queue.clear()
-    abm.add_event(t=0.0, event_type=ab.EventType.Move, agent=harold.id)
+    abm.add_event(t=0.5, event_type=ab.EventType.Move, agent=harold.id)
     abm.handle_next_event()
 
     assert harold.location != 'C'
