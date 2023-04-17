@@ -1,8 +1,11 @@
+__all__ = ['Interval']
+
+from dataclasses import dataclass
+
+@dataclass(order=True, frozen=True)
 class Interval():
-    __slots__ = ['start', 'stop']
-    def __init__(self, start=float('-Inf'), stop=float('Inf')):
-        self.start = start
-        self.stop = stop
+    start: float
+    end: float
 
     def __contains__(self, value):
-        return self.start <= value <= self.stop
+        return self.start <= value <= self.end

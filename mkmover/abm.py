@@ -1,39 +1,88 @@
+__all__ = ['Agent', 'MemoryAgent', 'Location', 'AgentMover', 'EventType', 'Event', 'ModelState', 'Model']
+
 import dataclasses
 import enum
 import math
-import random
-from bisect import bisect
-from collections import ChainMap, deque
+import heapq
+from collections import deque, defaultdict
+from typing import Hashable
+from abc import ABC, abstractmethod
 
-import sortedcontainers
+class HeapList():
+    """Class that is used to maintain a sorted list"""
+    def __init__(self, data=None):
+        if data is None:
+            self.heap = []
+        else:
+            self.heap = list(data)
+            heapq.heapify(self.heap)
+
+    def add(self, item):
+        """Push item onto heap"""
+        heapq.heappush(self.heap, item)
+
+    def __getitem__(self, index):
+        return self.heap[index]
+
+    def pop(self):
+        """Pop the minimum item (first item)"""
+        return heapq.heappop(self.heap)
+
+    def __len__(self):
+        return len(self.heap)
 
 class Agent():
-    def __init__(self, name, maxhist=None):
+    def __init__(self, name: Hashable):
         """Represents a patient or other vector.
 
         :param name: unique identifier
-        :param maxhist: (max) length of recorded location history, defaults to None (no limit)
         """
         self.id = name
         self.infected = False
         self.location = None
-        self.history = deque(maxlen=maxhist)
 
     def __repr__(self):
-        return f"Agent('{self.id}', maxhist={self.history.maxlen})"
+        return f"{self.__class__}(name={self.name})"
 
     def __str__(self):
         return f"Agent ({self.id}) [{self.location}] {{{self.infected}}}"
 
-    def move_to(self, location):
+    def move_to(self, location: Hashable):
         """Record a movement of the agent to a different location.
-        We use history as a lookup, so it contains the current position.
         """
         self.location = location
-        self.history.append(self.location)
+
+    @property
+    def state(self):
+        return self.infected
+
+class MemoryAgent(Agent):
+
+    def __init__(self, name: Hashable, maxhist: int=None):
+        """Represents a patient ot other vector. Retains a history of previously visited locations.
+        
+        :param name: unique identifier
+        :param maxhist: (max) length of recorded location history, defaults to None (no limit)
+        """
+        super().__init__(name)
+        self.history = deque(maxlen=maxhist)
+
+    def __repr__(self):
+        return f"{self.__class__}(name={self.name}, maxhist={self.history.maxlen})"
+
+    def move_to(self, location: Hashable):
+        """Record a movement to another location.
+        Also inserts the new location into history for lookups
+        """
+        self.location = location
+        self.history.append(location)
+
+    @property
+    def state(self):
+        return self.infected, *reversed(self.history)
 
 class Location():
-    def __init__(self, name):
+    def __init__(self, name: Hashable):
         self.id = name
         self.occupants = set()
 
@@ -43,78 +92,46 @@ class Location():
     def __str__(self) -> str:
         return F"Location ({self.id}) [{len(self.occupants)}]"
 
-    def _repr_pretty_(self, p, cycle):
-       p.text(str(self) if not cycle else '...')
-
-
-class CompiledOutcomes():
-    def __init__(self, data=None):
-        self.outcomes = []
-        self.cdf = []
-        self.total = 0
-
-        if data is not None:
-            self.compile(data)
+class AgentMover(ABC):
+    """Helper object that can be used to determine the next location an agent moves to
     
-    def compile(self, pdict):
-        """Construct the CDF for the outcome map"""
-        for k,v in pdict.items():
-            self.outcomes.append(k)
-            self.total += v
-            self.cdf.append(self.total)
+    See: markov_mover.MarkovMover for an implementation of a Markov model
+    """
 
-    def weighted_choice(self):
-        """Provided by Raymond Hettinger on stackoverflow
-        O(log(n)) lookup on a compiled CDF object
-        """
-        x = random.random() * self.total
-        i = bisect(self.cdf, x)
-        return self.outcomes[i]
+    def next_location(self, *args, **kwargs):
+        """Returns the next location that an agent would move to"""
+        pass
 
-class AgentMover():
-    """Mapping of movement probabilities of an agent"""
+EventType = enum.Enum('EventType', [])
 
-    def __init__(self, data=None):
-        self.move_probs = ChainMap()
-        if data is not None:
-            self.add_move_probs(data)
-
-    def __repr__(self):
-        return "AgentMover()"
-
-    def add_move_probs(self, new_map):
-        """Add a new map onto the front of the chain of lookups of move probs"""
-        compiled_map = {
-            key: CompiledOutcomes(value)
-            for key, value in new_map.items()
-        }
-        self.move_probs = self.move_probs.new_child(compiled_map)
-
-    def next_location(self, agent):
-        """Generate a realisation of the next location an agent moves to, 
-        given their infection state and their movement history
-        """
-        agent_state = (agent.infected, *reversed(agent.history))
-        movement_outcomes = self.move_probs[agent_state]
-        return movement_outcomes.weighted_choice()
-
-class EventType(enum.Enum):
-    Move = enum.auto()
-    Infect = enum.auto()
-
-@dataclasses.dataclass(order=True)
+@dataclasses.dataclass(frozen=True, eq=True, order=True)
 class Event():
+    """Data object that represents an event that will happen"""
     t: float
     event_type: EventType
     agent: str
 
-class ABM():
+class ModelState():
+    """State representation of the model.
+    Contains the agents, locations, time, queue of events.
+
+    Attributes:
+    -----------
+    agents : map of agent name to Agent object
+    locations: map of location name to Location object
+    t: current simulation time
+    event_queue: queue (sorted list/deque) of events
+    event_map: map of agent name to list of associated queued events
+    """
+    
     def __init__(self):
         self.agents = dict() # map of agent name to Agent
         self.locations = dict() # map of location name to Location
-        self.mover = AgentMover() # map of how people move around
         self.t = 0
-        self.queue = sortedcontainers.SortedList()
+        self.event_queue = HeapList() # list of events
+        self.event_map = defaultdict(set) # map of agent to events
+
+        self._event_base = Event
 
     def __repr__(self) -> str:
         return "ABM()"
@@ -122,56 +139,67 @@ class ABM():
     def __str__(self) -> str:
         return f"ABM: [{self.t}] {len(self.agents)} agents, {len(self.locations)} locations, {len(self.queue)} events queued."
 
-    def move(self, agent, location):
+    def move(self, agent: Hashable, location: Hashable):
         agent_obj = self.agents[agent]
         loc_obj = self.locations[location]
 
         old_loc = self.locations.get(agent_obj.location, None)
         if old_loc:
-            old_loc.occupants.remove(agent)
+            old_loc.occupants.discard(agent)
         agent_obj.move_to(location)
         loc_obj.occupants.add(agent)
 
-    def do_next_move(self, agent):
+    def do_next_move(self, agent: Hashable):
         agent_obj = self.agents[agent]
         next_loc = self.mover.next_location(agent_obj)
         self.move(agent, next_loc)
 
-    def add_agent(self, agent):
+    def add_agent(self, agent: Agent):
         self.agents[agent.id] = agent
 
-    def add_location(self, location):
+    def add_location(self, location: Location):
         self.locations[location.id] = location
 
-    def add_generic_agents(self, n):
+    def add_generic_agents(self, n: int):
+        """Helper utility for adding in random agents"""
         digits = int(math.ceil(math.log10(n)))
         for i in range(n):
             agent = Agent(f"agent_{i:0{digits}}")
             self.add_agent(agent)
 
-    def move_all_to(self, location):
+    def move_all_to(self, location: Hashable):
         for agent in self.agents:
             self.move(agent, location)
 
-    def add_event(self, t, event_type, agent):
-        self.queue.add(Event(t, event_type, agent))
+    def add_event(self, t: float, event_type: EventType, agent: Hashable, *args, **kwargs):
+        event = self._event_base(t, event_type, agent, *args, **kwargs)
+        self.event_queue.add(event)
+        self.event_map[agent].add(event)
 
-    def do_potential_infect(self, agent):
-        loc = self.agents[agent].location
-        targets = self.locations[loc].occupants
-        if len(targets) < 2:
-            return
-        cands = random.sample(list(targets), k=2)
-        if cands[0] == agent:
-            cands.remove(agent)
-        cand_obj = self.agents[cands[0]]
-        if cand_obj.infected == 'S':
-            cand_obj.infected = 'I'
+class ModelHistory(list):
+    pass
 
-    def handle_next_event(self):
-        next_event = self.queue.pop(0)
-        self.t = next_event.t
-        if next_event.event_type is EventType.Move:
-            self.do_next_move(next_event.agent)
-        elif next_event.event_type is EventType.Infect:
-            self.do_potential_infect(next_event.agent)
+class Model(ABC):
+
+    def __init__(self):
+        self.state = ModelState()
+        self.history = ModelHistory()
+
+    @abstractmethod
+    def initialise_state(self):
+        """Initialise the state of the ABM state object to its state at the start of sim"""
+        pass
+
+    @abstractmethod
+    def generate_initial_events(self):
+        """Populate events known before the simulation runs, to occur during sim time.
+        """
+        pass
+
+    @abstractmethod
+    def update_agent_events(self, agent: Hashable, occured_event_type: EventType):
+        """Update any associated events of the agent, given that they have just undergone an event"""
+        pass
+
+    def simulate(self, until=None):
+        pass
