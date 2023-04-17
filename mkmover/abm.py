@@ -5,6 +5,7 @@ import enum
 import math
 import heapq
 from collections import deque, defaultdict
+from functools import total_ordering
 from typing import Hashable
 from abc import ABC, abstractmethod
 
@@ -102,7 +103,11 @@ class AgentMover(ABC):
         """Returns the next location that an agent would move to"""
         pass
 
-EventType = enum.Enum('EventType', [])
+# EventType = enum.Enum('EventType', [])
+@total_ordering
+class EventType(enum.Enum):
+    def __lt__(self, other):
+        return self.value < other.value
 
 @dataclasses.dataclass(frozen=True, eq=True, order=True)
 class Event():
