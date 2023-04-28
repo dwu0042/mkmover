@@ -43,7 +43,7 @@ class Agent():
         self.location = None
 
     def __repr__(self):
-        return f"{self.__class__}(name={self.name})"
+        return f"{self.__class__}(name={self.id})" 
 
     def __str__(self):
         return f"Agent ({self.id}) [{self.location}] {{{self.infected}}}"
@@ -59,7 +59,7 @@ class Agent():
 
 class MemoryAgent(Agent):
 
-    def __init__(self, name: Hashable, maxhist: int=None):
+    def __init__(self, name: Hashable, maxhist: int|None=None):
         """Represents a patient ot other vector. Retains a history of previously visited locations.
         
         :param name: unique identifier
@@ -69,7 +69,7 @@ class MemoryAgent(Agent):
         self.history = deque(maxlen=maxhist)
 
     def __repr__(self):
-        return f"{self.__class__}(name={self.name}, maxhist={self.history.maxlen})"
+        return f"{self.__class__}(name={self.id}, maxhist={self.history.maxlen})"
 
     def move_to(self, location: Hashable):
         """Record a movement to another location.
@@ -114,7 +114,7 @@ class Event():
     """Data object that represents an event that will happen"""
     t: float
     event_type: EventType
-    agent: str
+    agent: Hashable
 
 class ModelState():
     """State representation of the model.
@@ -142,7 +142,7 @@ class ModelState():
         return "ABM()"
 
     def __str__(self) -> str:
-        return f"ABM: [{self.t}] {len(self.agents)} agents, {len(self.locations)} locations, {len(self.queue)} events queued."
+        return f"ABM: [{self.t}] {len(self.agents)} agents, {len(self.locations)} locations, {len(self.event_queue)} events queued."
 
     def move(self, agent: Hashable, location: Hashable):
         agent_obj = self.agents[agent]
@@ -153,11 +153,6 @@ class ModelState():
             old_loc.occupants.discard(agent)
         agent_obj.move_to(location)
         loc_obj.occupants.add(agent)
-
-    def do_next_move(self, agent: Hashable):
-        agent_obj = self.agents[agent]
-        next_loc = self.mover.next_location(agent_obj)
-        self.move(agent, next_loc)
 
     def add_agent(self, agent: Agent):
         self.agents[agent.id] = agent
@@ -191,20 +186,5 @@ class Model(ABC):
         self.history = ModelHistory()
 
     @abstractmethod
-    def initialise_state(self):
-        """Initialise the state of the ABM state object to its state at the start of sim"""
-        pass
-
-    @abstractmethod
-    def generate_initial_events(self):
-        """Populate events known before the simulation runs, to occur during sim time.
-        """
-        pass
-
-    @abstractmethod
-    def update_agent_events(self, agent: Hashable, occured_event_type: EventType):
-        """Update any associated events of the agent, given that they have just undergone an event"""
-        pass
-
     def simulate(self, until=None):
         pass
